@@ -7,12 +7,12 @@ import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule,
     {
-      transport: Transport.TCP,
-      options: { port: envs.port }
+      transport: Transport.NATS,
+      options: { servers: envs.natsServers }
     }
   )
   const logger = new Logger("Orders Microservice Main")
-  
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

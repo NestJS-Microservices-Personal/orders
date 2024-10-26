@@ -1,2 +1,1 @@
-
-export const PRODUCT_SERVICE = "product_service"
+export const NATS_SERVICE = "nats_service"

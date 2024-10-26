@@ -2,11 +2,12 @@ import { HttpStatus, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/co
 import { PrismaClient } from '@prisma/client';
 import { ChangeOrderStatusDto, CreateOrderDto, PaginationOrderDto } from './dto';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { PRODUCT_SERVICE } from 'src/config';
-import { async, firstValueFrom } from 'rxjs';
+import { NATS_SERVICE } from 'src/config';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class OrdersService extends PrismaClient implements OnModuleInit {
+
   public get productClient(): ClientProxy {
     return this._productClient;
   }
@@ -19,7 +20,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
   }
 
   constructor(
-    @Inject(PRODUCT_SERVICE)
+    @Inject(NATS_SERVICE)
     private readonly _productClient: ClientProxy
   ) {
     super()
@@ -38,20 +39,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
         return acc
       }, [])
 
-      // console.time('indexado')
-      // const total =  createOrderDto.items.reduce( (acc, orderItem)=>{
-      //     const price = productsIndex[orderItem.productId].price;
-      //     return {
-      //       totalAmount: price * orderItem.quantity,
-      //       totalItem: acc.totalItem + orderItem.quantity
-      //     }
-      //   },{ totalAmount: 0, totalItem: 0}
-      // )
-      // console.timeEnd('indexado')
-
-
       const totalAmount: number = createOrderDto.items.reduce((acc, orderItem) => {
-        // const price: number = products.find( product => product.id === orderItem.productId).price;
         const price = productsIndex[orderItem.productId].price;
         return price * orderItem.quantity
       }, 0)
