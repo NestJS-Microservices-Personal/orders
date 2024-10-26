@@ -81,8 +81,8 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
 
     } catch (error) {
       throw new RpcException({
-        message: 'Product Id not found',
-        status: HttpStatus.BAD_REQUEST
+        message: 'Products Ids not found',
+        status: HttpStatus.NOT_FOUND
       })
     }
   }
