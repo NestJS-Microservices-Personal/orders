@@ -4,15 +4,13 @@ import { ChangeOrderStatusDto, CreateOrderDto, PaginationOrderDto } from './dto'
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { NATS_SERVICE } from 'src/config';
 import { firstValueFrom } from 'rxjs';
+import { OrderWithProducts } from './interfaces/order-with-products.interface';
+import { PaidOrderDto } from './dto/paid-order.dto';
 
 @Injectable()
 export class OrdersService extends PrismaClient implements OnModuleInit {
 
-  public get productClient(): ClientProxy {
-    return this._productClient;
-  }
-
-  private readonly logger = new Logger('Orders Service');
+ private readonly logger = new Logger('Orders Service');
 
   async onModuleInit() {
     await this.$connect();
@@ -21,7 +19,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
 
   constructor(
     @Inject(NATS_SERVICE)
-    private readonly _productClient: ClientProxy
+    private readonly productClient: ClientProxy
   ) {
     super()
   }
@@ -114,11 +112,11 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
 
   async findOne(id: string) {
     const orderByID = await this.order.findFirst({
-         where: { id },
-        include: {
-          OrderItem: true
-        }
-        });
+      where: { id },
+      include: {
+        OrderItem: true
+      }
+    });
 
     if (!orderByID) throw new RpcException({
       status: HttpStatus.NOT_FOUND,
@@ -138,7 +136,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
 
     return {
       ...orderByID,
-      OrderItem: orderByID.OrderItem.map(orderItem =>  {
+      OrderItem: orderByID.OrderItem.map(orderItem => {
         if (orderItem.orderId === orderByID.id) {
           return {
             productId: orderItem.productId,
@@ -151,17 +149,64 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
     }
   };
 
-
   async changeStatus(changeOrderStatusDto: ChangeOrderStatusDto) {
-  const { id, status } = changeOrderStatusDto
+    const { id, status } = changeOrderStatusDto
 
-  const orderByID = await this.findOne(id);
-  if (orderByID.status === status) return orderByID;
+    const orderByID = await this.findOne(id);
+    if (orderByID.status === status) return orderByID;
 
-  return this.order.update({
-    where: { id },
-    data: { status }
-  })
-}
+    return this.order.update({
+      where: { id },
+      data: { status }
+    })
+  }
+
+  async createPaymentSession(order: OrderWithProducts) {
+    try {
+      const paymentSession = await firstValueFrom(
+        this.productClient.send({ cmd: 'create.payment.session' }, {
+          orderId: order.id,
+          currency: 'EUR',
+          items: order.OrderItem.map(item => ({
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity
+          }))
+        })
+      )
+
+      return paymentSession
+
+    } catch (error) {
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error creating payment session'
+
+      })
+    }
+  }
+
+  async paidOrder(paidOrderDto: PaidOrderDto) {
+    const { orderId, stripePaymentId, receiptUrl } = paidOrderDto
+
+    await this.findOne(orderId);
+
+    const updateOrder = await this.order.update({
+      where: { id: orderId },
+      data: {
+        status: 'PAID',
+        paid: true,
+        paidAt: new Date(),
+        stripeChargeId: stripePaymentId,
+
+        OrderReceipt: {
+          create: {
+            receiptUrl
+          }
+        }
+      }
+    })
+    return updateOrder;
+  }
 
 }
